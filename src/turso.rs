@@ -65,10 +65,7 @@ fn parse_value(
                 Some(v) => Ok(Some(CellValue::Float(v))),
                 None => Err(worker::Error::from(format!(
                     "Result {} row {} cell {} had unknown number value: {}",
-                    result_idx,
-                    row_idx,
-                    cell_idx,
-                    v.to_string()
+                    result_idx, row_idx, cell_idx, v
                 ))),
             },
         },
@@ -121,24 +118,15 @@ fn parse_result_set(result: serde_json::Value, idx: usize) -> Result<ResultSet> 
             let error = obj.get("error");
             match error {
                 Some(err) => match err {
-                    serde_json::Value::Object(obj) => {
-                        let error = obj.get("message");
-                        match error {
-                            Some(msg) => match msg {
-                                serde_json::Value::String(msg) => {
-                                    Ok(ResultSet::Error((msg.clone(), Meta::default())))
-                                }
-                                _ => Err(worker::Error::from(format!(
-                                    "Result {} error message was not a string",
-                                    idx
-                                ))),
-                            },
-                            None => Err(worker::Error::from(format!(
-                                "Result {} error message was not a string",
-                                idx
-                            ))),
+                    serde_json::Value::Object(obj) => match obj.get("message") {
+                        Some(serde_json::Value::String(msg)) => {
+                            Ok(ResultSet::Error((msg.clone(), Meta::default())))
                         }
-                    }
+                        _ => Err(worker::Error::from(format!(
+                            "Result {} error message was not a string",
+                            idx
+                        ))),
+                    },
                     _ => Err(worker::Error::from(format!(
                         "Result {} results was not an object",
                         idx
@@ -147,44 +135,36 @@ fn parse_result_set(result: serde_json::Value, idx: usize) -> Result<ResultSet> 
                 None => {
                     let results = obj.get("results");
                     match results {
-                        Some(results) => {
-                            match results {
-                                serde_json::Value::Object(obj) => {
-                                    let columns = obj.get("columns");
-                                    match columns {
-                                        Some(columns) => {
-                                            let rows = obj.get("rows");
-                                            match rows {
-                                                Some(rows) => {
-                                                    match columns {
-                                                        serde_json::Value::Array(columns) => {
-                                                            match rows {
-                                                                serde_json::Value::Array(rows) => {
-                                                                    let columns = parse_columns(columns.to_vec(), idx)?;
-                                                                    let rows = parse_rows(rows.to_vec(), &columns, idx)?;
-                                                                    Ok(ResultSet::Success((Rows{columns, rows}, Meta::default())))
-                                                                },
-                                                                _ => Err(worker::Error::from(format!("Result {} had rows that were not an array", idx)))
-                                                            }
-                                                        },
-                                                        _ => Err(worker::Error::from(format!("Result {} had columns that were not an array", idx)))
-                                                    }
-                                                },
-                                                None => Err(worker::Error::from(format!("Result {} had no rows", idx)))
-                                            }
-                                        }
-                                        None => Err(worker::Error::from(format!(
-                                            "Result {} had no columns",
-                                            idx
-                                        ))),
-                                    }
+                        Some(serde_json::Value::Object(obj)) => {
+                            let columns = obj.get("columns").ok_or(worker::Error::from(
+                                format!("Result {} had no columns", idx),
+                            ))?;
+                            let rows = obj.get("rows").ok_or(worker::Error::from(format!(
+                                "Result {} had no rows",
+                                idx
+                            )))?;
+                            match (rows, columns) {
+                                (
+                                    serde_json::Value::Array(rows),
+                                    serde_json::Value::Array(columns),
+                                ) => {
+                                    let columns = parse_columns(columns.to_vec(), idx)?;
+                                    let rows = parse_rows(rows.to_vec(), &columns, idx)?;
+                                    Ok(ResultSet::Success((
+                                        Rows { columns, rows },
+                                        Meta::default(),
+                                    )))
                                 }
                                 _ => Err(worker::Error::from(format!(
-                                    "Result {} was not an object",
+                                    "Result {} had rows or columns that were not an array",
                                     idx
                                 ))),
                             }
                         }
+                        Some(_) => Err(worker::Error::from(format!(
+                            "Result {} was not an object",
+                            idx
+                        ))),
                         None => Err(worker::Error::from(format!(
                             "Result {} did not contain results or error",
                             idx
@@ -213,7 +193,7 @@ impl Turso {
 
     pub async fn execute(&self, stmt: impl Into<String>) -> Result<ResultSet> {
         let mut results = self.transaction(vec![stmt.into()]).await?;
-        return Ok(results.remove(0));
+        Ok(results.remove(0))
     }
 
     pub async fn transaction(&self, stmts: Vec<String>) -> Result<Vec<ResultSet>> {

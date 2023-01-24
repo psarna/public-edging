@@ -54,27 +54,23 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
             let response = db
                 .execute("SELECT * FROM counter WHERE key = 'turso'")
                 .await?;
-            let mut counter_value = 0;
-            match response {
+            let counter_value = match response {
                 ResultSet::Error((msg, _)) => {
                     return Response::from_html(format!("Error: {}", msg))
                 }
                 ResultSet::Success((rows, _)) => {
-                    if rows.rows.len() < 0 {
-                        return Response::from_html("Zero results for counter queryies");
+                    if rows.rows.is_empty() {
+                        return Response::from_html("Zero results for counter queries");
                     }
                     match rows.rows[0].cells.get("value") {
-                        Some(v) => match v {
-                            Some(v) => match v {
-                                CellValue::Number(v) => counter_value = *v,
-                                _ => return Response::from_html("Unexpected counter value"),
-                            },
-                            None => return Response::from_html("No value for 'value' column"),
+                        Some(Some(v)) => match v {
+                            CellValue::Number(v) => *v,
+                            _ => return Response::from_html("Unexpected counter value"),
                         },
-                        None => return Response::from_html("No value for 'value' column"),
+                        _ => return Response::from_html("No value for 'value' column"),
                     }
                 }
-            }
+            };
             db.execute(format!(
                 "UPDATE counter SET value = {} WHERE key = 'turso'",
                 counter_value + 1
@@ -82,11 +78,11 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
             .await
             .ok();
 
-            return Response::from_html(format!(
+            Response::from_html(format!(
                 "Counter was just successfully bumped: {} -> {}. Congrats!",
                 counter_value,
                 counter_value + 1,
-            ));
+            ))
         })
         .post_async("/form/:field", |mut req, ctx| async move {
             if let Some(name) = ctx.param("field") {
