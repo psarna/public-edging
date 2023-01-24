@@ -1,5 +1,5 @@
 use serde_json::json;
-use turso::{ResultSet, CellValue};
+use turso::{CellValue, ResultSet};
 use worker::*;
 
 mod turso;
@@ -56,29 +56,24 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                 .await?;
             let mut counter_value = 0;
             match response {
-                ResultSet::Error((msg, _)) => return Response::from_html(format!(
-                    "Error: {}",
-                    msg
-                )),
+                ResultSet::Error((msg, _)) => {
+                    return Response::from_html(format!("Error: {}", msg))
+                }
                 ResultSet::Success((rows, _)) => {
                     if rows.rows.len() < 0 {
-                        return Response::from_html("Zero results for counter queryies")
+                        return Response::from_html("Zero results for counter queryies");
                     }
                     match rows.rows[0].cells.get("value") {
-                        Some(v) => {
-                            match v {
-                                Some(v) => {
-                                    match v {
-                                        CellValue::Number(v) => counter_value = *v,
-                                        _ => return Response::from_html("Unexpected counter value")
-                                    }
-                                },
-                                None => return Response::from_html("No value for 'value' column")
-                            }
+                        Some(v) => match v {
+                            Some(v) => match v {
+                                CellValue::Number(v) => counter_value = *v,
+                                _ => return Response::from_html("Unexpected counter value"),
+                            },
+                            None => return Response::from_html("No value for 'value' column"),
                         },
-                        None => return Response::from_html("No value for 'value' column")
+                        None => return Response::from_html("No value for 'value' column"),
                     }
-                },
+                }
             }
             db.execute(format!(
                 "UPDATE counter SET value = {} WHERE key = 'turso'",
