@@ -1,8 +1,7 @@
-use leptos::{render_to_string, view};
 use serde_json::json;
-use view::app::{App, AppProps};
 use worker::*;
 
+mod turso;
 mod utils;
 
 trait Foo {
@@ -29,43 +28,6 @@ fn log_request(req: &Request) {
     );
 }
 
-struct Turso {
-    url: String,
-    auth: String,
-}
-
-impl Turso {
-    fn connect(url: impl Into<String>, username: &str, pass: &str) -> Self {
-        Self {
-            url: url.into(),
-            auth: format!("Basic {}", base64::encode(format!("{}:{}", username, pass))),
-        }
-    }
-
-    async fn execute(&self, stmt: impl Into<String>) -> Result<String> {
-        let mut headers = Headers::new();
-        headers.append("Authorization", &self.auth).ok();
-        let request_init = RequestInit {
-            body: Some(wasm_bindgen::JsValue::from_str(&format!(
-                "{{\"statements\": [\"{}\"]}}",
-                stmt.into()
-            ))),
-            headers,
-            cf: CfProperties::new(),
-            method: Method::Post,
-            redirect: RequestRedirect::Follow,
-        };
-        let req = Request::new_with_init(&self.url, &request_init)?;
-        let response = Fetch::Request(req).send().await;
-        let response_string = match response?.body() {
-            ResponseBody::Empty => String::new(),
-            ResponseBody::Body(v) => format!("{:?}", v),
-            ResponseBody::Stream(s) => format!("{:?}", s),
-        };
-        Ok(response_string)
-    }
-}
-
 #[event(fetch)]
 pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
     log_request(&req);
@@ -83,14 +45,36 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     // Environment bindings like KV Stores, Durable Objects, Secrets, and Variables.
     router
         .get_async("/", |_, _| async move {
-            let turso = Turso::connect(
+            let db = turso::Turso::connect(
                 "http://iku-turso-809cf47c-9bce-11ed-801b-16cdfc4973c0-primary.fly.dev",
                 "psarna",
                 "69RIy0Z7J5AC8h24",
             );
-            let response = turso.execute("EXPLAIN SELECT * FROM sqlite_master").await?;
+            let response = db
+                .execute("SELECT * FROM counter WHERE key = 'turso'")
+                .await?;
+            let response_json: serde_json::Value = serde_json::from_str(&response)?;
+            let counter_value = match response_json[0]["results"]["rows"][0][1].as_i64() {
+                Some(v) => v,
+                None => {
+                    return Response::from_html(format!(
+                        "Unexpected counter value: {}",
+                        response_json
+                    ))
+                }
+            };
+            db.execute(format!(
+                "UPDATE counter SET value = {} WHERE key = 'turso'",
+                counter_value + 1
+            ))
+            .await
+            .ok();
 
-            return Response::from_html(response);
+            return Response::from_html(format!(
+                "Counter was just successfully bumped: {} -> {}. Congrats!",
+                counter_value,
+                counter_value + 1,
+            ));
         })
         .post_async("/form/:field", |mut req, ctx| async move {
             if let Some(name) = ctx.param("field") {
