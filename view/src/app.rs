@@ -6,4 +6,3 @@ pub fn App(cx: Scope) -> impl IntoView {
         <div> "Hello, from leptos" </div>
     };
 }
-

@@ -21,6 +21,7 @@ leptos.workspace = true
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.1", optional = true }
 view = { path = "./view" }
+base64 = "0.21.0"
 
 [workspace.dependencies]
 # I know i am doing this wrong
