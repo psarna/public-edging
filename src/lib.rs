@@ -1,7 +1,7 @@
+use leptos::{render_to_string, view};
 use serde_json::json;
-use worker::*;
 use view::app::{App, AppProps};
-use leptos::{render_to_string, create_runtime, view, IntoView};
+use worker::*;
 
 mod utils;
 
@@ -45,12 +45,36 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     // functionality and a `RouteContext` which you can use to  and get route parameters and
     // Environment bindings like KV Stores, Durable Objects, Secrets, and Variables.
     router
-        .get("/", |_, _| {
+        .get_async("/", |_, _| async move {
             let html = render_to_string(|cx| {
                 return view! {cx,
                     <App />
                 };
             });
+
+            let mut headers = Headers::new();
+            headers
+                .append("Authorization", "Basic cHNhcm5hOjY5Ukl5MFo3SjVBQzhoMjQ=")
+                .ok();
+            let stmt = "INSERT INTO counter VALUES (4, 1000);";
+            let request_init = RequestInit {
+                body: Some(wasm_bindgen::JsValue::from_str(&format!(
+                    "{{\"statements\": [\"{}\"]}}",
+                    stmt
+                ))),
+                headers,
+                cf: CfProperties::new(),
+                method: Method::Post,
+                redirect: RequestRedirect::Follow,
+            };
+            let mut req = Request::new_with_init(
+                "http://iku-turso-809cf47c-9bce-11ed-801b-16cdfc4973c0-primary.fly.dev",
+                &request_init,
+            )
+            .unwrap();
+            let req_str = format!("{:?}", req);
+            let response = Fetch::Request(req).send().await;
+            let html = format!("Request: {}, Result: {:?}", req_str, response);
 
             return Response::from_html(html);
         })
