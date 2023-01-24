@@ -71,10 +71,10 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                     }
                 }
             };
-            db.execute(format!(
+            db.transaction([format!(
                 "UPDATE counter SET value = {} WHERE key = 'turso'",
                 counter_value + 1
-            ))
+            )])
             .await
             .ok();
 

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::iter::IntoIterator;
 
 use base64::Engine;
 use worker::*;
@@ -187,17 +188,24 @@ impl Turso {
     }
 
     pub async fn execute(&self, stmt: impl Into<String>) -> Result<ResultSet> {
-        let mut results = self.transaction(vec![stmt.into()]).await?;
+        let mut results = self.batch(std::iter::once(stmt)).await?;
         Ok(results.remove(0))
     }
 
-    pub async fn transaction(&self, stmts: Vec<String>) -> Result<Vec<ResultSet>> {
+    pub async fn batch(
+        &self,
+        stmts: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Result<Vec<ResultSet>> {
         let mut headers = Headers::new();
         headers.append("Authorization", &self.auth).ok();
+        let stmts: Vec<String> = stmts
+            .into_iter()
+            .map(|s| format!("\"{}\"", s.into()))
+            .collect();
         let request_init = RequestInit {
             body: Some(wasm_bindgen::JsValue::from_str(&format!(
-                "{{\"statements\": [\"{}\"]}}",
-                stmts.join(";")
+                "{{\"statements\": [{}]}}",
+                stmts.join(",")
             ))),
             headers,
             cf: CfProperties::new(),
@@ -224,7 +232,22 @@ impl Turso {
                     Ok(result_sets)
                 }
             }
-            _ => Err(worker::Error::from("Response JSON was not an array")),
+            e => Err(worker::Error::from(format!(
+                "Error: {} ({:?})",
+                e, request_init.body
+            ))),
         }
+    }
+
+    pub async fn transaction(
+        &self,
+        stmts: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Result<Vec<ResultSet>> {
+        self.batch(
+            std::iter::once("BEGIN".to_string())
+                .chain(stmts.into_iter().map(|s| s.into()))
+                .chain(std::iter::once("END".to_string())),
+        )
+        .await
     }
 }
