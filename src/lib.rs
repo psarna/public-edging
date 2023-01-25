@@ -52,6 +52,14 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
             // first, and then updates it, and the operations are not atomic. It's only done
             // like that for demonstration purposes, please refrain from complaining online
             // that the code is not correct!
+
+            db.transaction([
+                "CREATE TABLE IF NOT EXISTS counter(key int PRIMARY KEY, value)",
+                "INSERT INTO counter VALUES ('turso', 0)",
+            ])
+            .await
+            .ok();
+
             let response = db
                 .execute("SELECT * FROM counter WHERE key = 'turso'")
                 .await?;
