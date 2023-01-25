@@ -1,5 +1,5 @@
-use serde_json::json;
 use libsql_client::{CellValue, ResultSet};
+use serde_json::json;
 use worker::*;
 
 mod utils;
@@ -50,6 +50,10 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                 "psarna",
                 "69RIy0Z7J5AC8h24",
             );
+            // Note: this counter update code is subject to races, because it reads the value
+            // first, and then updates it, and the operations are not atomic. It's only done
+            // like that for demonstration purposes, please refrain from complaining online
+            // that the code is not correct!
             let response = db
                 .execute("SELECT * FROM counter WHERE key = 'turso'")
                 .await?;
@@ -78,9 +82,7 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                 counter_value + 1,
             );
             html += "<br><br> And here's the whole database, dumped: <br>";
-            let response = db
-                .execute("SELECT * FROM counter")
-                .await?;
+            let response = db.execute("SELECT * FROM counter").await?;
             match response {
                 ResultSet::Error((msg, _)) => {
                     return Response::from_html(format!("Error: {}", msg))
