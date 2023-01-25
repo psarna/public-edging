@@ -71,6 +71,27 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                     }
                 }
             };
+
+            let mut html = format!(
+                "Counter was just successfully bumped: {} -> {}. Congrats!",
+                counter_value,
+                counter_value + 1,
+            );
+            html += "<br><br> And here's the whole database, dumped: <br>";
+            let response = db
+                .execute("SELECT * FROM counter")
+                .await?;
+            match response {
+                ResultSet::Error((msg, _)) => {
+                    return Response::from_html(format!("Error: {}", msg))
+                }
+                ResultSet::Success((rows, _)) => {
+                    for row in rows.rows {
+                        html += &format!("{:?} <br>", row);
+                    }
+                }
+            };
+
             db.transaction([format!(
                 "UPDATE counter SET value = {} WHERE key = 'turso'",
                 counter_value + 1
@@ -78,11 +99,7 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
             .await
             .ok();
 
-            Response::from_html(format!(
-                "Counter was just successfully bumped: {} -> {}. Congrats!",
-                counter_value,
-                counter_value + 1,
-            ))
+            Response::from_html(html)
         })
         .post_async("/form/:field", |mut req, ctx| async move {
             if let Some(name) = ctx.param("field") {

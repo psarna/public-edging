@@ -860,9 +860,9 @@ checksum = "201de327520df007757c1f0adce6e827fe8562fbc28bfd9c15571c66ca1f5f79"
 
 [[package]]
 name = "libsql-client"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc12f0ff0d7fc71206f9293ecd277d25a3170b33dfb96f6936dc524f201a895b"
+checksum = "d37a6a76b86890da585d2b64365804ae927fa122ad144e2ac46b31598bb0c5f9"
 dependencies = [
  "base64 0.21.0",
  "serde_json",
