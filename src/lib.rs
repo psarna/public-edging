@@ -44,19 +44,16 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     // functionality and a `RouteContext` which you can use to  and get route parameters and
     // Environment bindings like KV Stores, Durable Objects, Secrets, and Variables.
     router
-        .get_async("/", |_, _| async move {
-            let db = libsql_client::Session::connect(
-                "http://iku-turso-809cf47c-9bce-11ed-801b-16cdfc4973c0-primary.fly.dev",
-                "psarna",
-                "69RIy0Z7J5AC8h24",
-            );
+        .get_async("/", |_, ctx| async move {
+            let db = libsql_client::Session::connect_from_ctx(&ctx)?;
             // Note: this counter update code is subject to races, because it reads the value
             // first, and then updates it, and the operations are not atomic. It's only done
             // like that for demonstration purposes, please refrain from complaining online
             // that the code is not correct!
             let response = db
-                .execute("SELECT * FROM counter WHERE key = 'turso'")
+                .transaction(["SELECT * FROM counter WHERE key = 'turso'"])
                 .await?;
+            let response = response.first().unwrap();
             let counter_value = match response {
                 ResultSet::Error((msg, _)) => {
                     return Response::from_html(format!("Error: {}", msg))

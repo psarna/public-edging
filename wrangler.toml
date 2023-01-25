@@ -4,6 +4,9 @@ compatibility_date = "2022-01-20"
 
 [vars]
 WORKERS_RS_VERSION = "0.0.12"
+LIBSQL_CLIENT_URL = "http://iku-turso-809cf47c-9bce-11ed-801b-16cdfc4973c0-primary.fly.dev"
+LIBSQL_CLIENT_USER = "psarna"
+LIBSQL_CLIENT_PASS = "69RIy0Z7J5AC8h24"
 
 [build]
 command = "cargo install -q worker-build --version 0.0.7 && worker-build --release"
