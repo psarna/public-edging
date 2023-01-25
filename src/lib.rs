@@ -1,5 +1,7 @@
+use leptos::{render_to_string, view, IntoView};
 use libsql_client::{CellValue, ResultSet};
 use serde_json::json;
+use view::app::{App, AppProps};
 use worker::*;
 
 mod utils;
@@ -51,15 +53,14 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
             // like that for demonstration purposes, please refrain from complaining online
             // that the code is not correct!
             let response = db
-                .transaction(["SELECT * FROM counter WHERE key = 'turso'"])
+                .execute("SELECT * FROM counter WHERE key = 'turso'")
                 .await?;
-            let response = response.first().unwrap();
             let counter_value = match response {
                 ResultSet::Error((msg, _)) => {
                     return Response::from_html(format!("Error: {}", msg))
                 }
-                ResultSet::Success((rows, _)) => {
-                    let first_row = rows
+                ResultSet::Success((result, _)) => {
+                    let first_row = result
                         .rows
                         .first()
                         .ok_or(worker::Error::from("No rows found in the counter table"))?;
@@ -73,24 +74,6 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                 }
             };
 
-            let mut html = format!(
-                "Counter was just successfully bumped: {} -> {}. Congrats!",
-                counter_value,
-                counter_value + 1,
-            );
-            html += "<br><br> And here's the whole database, dumped: <br>";
-            let response = db.execute("SELECT * FROM counter").await?;
-            match response {
-                ResultSet::Error((msg, _)) => {
-                    return Response::from_html(format!("Error: {}", msg))
-                }
-                ResultSet::Success((rows, _)) => {
-                    for row in rows.rows {
-                        html += &format!("{:?} <br>", row);
-                    }
-                }
-            };
-
             db.transaction([format!(
                 "UPDATE counter SET value = {} WHERE key = 'turso'",
                 counter_value + 1
@@ -98,6 +81,42 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
             .await
             .ok();
 
+            let counter_status = format!(
+                "Counter was just successfully bumped: {} -> {}. Congrats!",
+                counter_value,
+                counter_value + 1,
+            );
+            // Author note: forgive me for all the inlined HTML, I don't speak leptos
+            let mut html =
+                "And here's the whole database, dumped: <br /><table style=\"border: 1px solid\">"
+                    .to_string();
+            let response = db.execute("SELECT * FROM counter").await?;
+            match response {
+                ResultSet::Error((msg, _)) => {
+                    return Response::from_html(format!("Error: {}", msg))
+                }
+                ResultSet::Success((result, _)) => {
+                    for column in &result.columns {
+                        html += &format!("<th style=\"border: 1px solid\">{}</th>", column);
+                    }
+                    for row in result.rows {
+                        html += "<tr style=\"border: 1px solid\">";
+                        for column in &result.columns {
+                            html += &format!("<td>{:?}</td>", row.cells[column]);
+                        }
+                        html += "</tr>";
+                    }
+                }
+            };
+            html += "</table>";
+
+            let html = render_to_string(|cx| {
+                view! {cx,
+                    {counter_status} <br /><br />
+                    {html} <br />
+                    <App />
+                }
+            });
             Response::from_html(html)
         })
         .post_async("/form/:field", |mut req, ctx| async move {
