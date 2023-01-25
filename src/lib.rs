@@ -46,7 +46,7 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     // functionality and a `RouteContext` which you can use to  and get route parameters and
     // Environment bindings like KV Stores, Durable Objects, Secrets, and Variables.
     router
-        .get_async("/", |_, ctx| async move {
+        .get_async("/", |req, ctx| async move {
             let db = libsql_client::Session::connect_from_ctx(&ctx)?;
             // Note: this counter update code is subject to races, because it reads the value
             // first, and then updates it, and the operations are not atomic. It's only done
@@ -57,6 +57,13 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                 "CREATE TABLE IF NOT EXISTS counter(key int PRIMARY KEY, value)",
                 "INSERT INTO counter VALUES ('turso', 0)",
             ])
+            .await
+            .ok();
+
+            db.execute(format!(
+                "INSERT INTO counter VALUES ('{}', 'region was used!')",
+                req.cf().region().unwrap_or_else(|| "unknown region".into())
+            ))
             .await
             .ok();
 
