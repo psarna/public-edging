@@ -1,8 +1,7 @@
 use serde_json::json;
-use turso::{CellValue, ResultSet};
+use libsql_client::{CellValue, ResultSet};
 use worker::*;
 
-mod turso;
 mod utils;
 
 trait Foo {
@@ -46,7 +45,7 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
     // Environment bindings like KV Stores, Durable Objects, Secrets, and Variables.
     router
         .get_async("/", |_, _| async move {
-            let db = turso::Turso::connect(
+            let db = libsql_client::Session::connect(
                 "http://iku-turso-809cf47c-9bce-11ed-801b-16cdfc4973c0-primary.fly.dev",
                 "psarna",
                 "69RIy0Z7J5AC8h24",
@@ -59,10 +58,11 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
                     return Response::from_html(format!("Error: {}", msg))
                 }
                 ResultSet::Success((rows, _)) => {
-                    if rows.rows.is_empty() {
-                        return Response::from_html("Zero results for counter queries");
-                    }
-                    match rows.rows[0].cells.get("value") {
+                    let first_row = rows
+                        .rows
+                        .first()
+                        .ok_or(worker::Error::from("No rows found in the counter table"))?;
+                    match first_row.cells.get("value") {
                         Some(Some(v)) => match v {
                             CellValue::Number(v) => *v,
                             _ => return Response::from_html("Unexpected counter value"),
